@@ -3,7 +3,11 @@
 // The list of file replacements can be found in `angular.json`.
 
 export const environment = {
-  production: false
+  production: false,
+  Stellar:{
+    liveNetwork:'https://horizon.stellar.org',
+    testNetwork:'https://horizon-testnet.stellar.org'
+  }
 };
 
 /*
