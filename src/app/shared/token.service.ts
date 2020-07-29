@@ -66,120 +66,117 @@ export class TokenService {
         this.server = new StellarSdk.Server(environment.Stellar.liveNetwork);
       }
     }
+    // load issuer account
+    return await this.server.loadAccount(issuerAcct.publicKey())
+      .catch(StellarSdk.NotFoundError, function(error) {
+        console.log('Issuer Account not active', error);
+        // throw new Error('Invalid Account');
+        return Promise.reject("Issuer Account not active")
+      })
+      .then((issuer) =>{
+        // issuerAcct = issuer;
+        console.log(distAcct, this.server, issuer);
+        // Load dist. account on stellar
+        return this.server.loadAccount(distAcct.publicKey());
+      })
+      .catch(StellarSdk.NotFoundError, (error) => {
+        console.log('Distributing Account not active', error);
+        // throw new Error('Invalid Account');
+        return Promise.reject("Distributing Account not active")
+      })
+      .then((base)=>{
+        // console.log(base);
+        var transaction = new StellarSdk.TransactionBuilder(base);
+        var operationObj = {} as any;
+        var setFlags;
 
+        if (tokenData.requireAuth) {
+          setFlags += StellarSdk.AuthRequiredFlag;
+        }
 
-          // load issuer account
-          return await this.server.loadAccount(issuerAcct.publicKey())
-            .catch(StellarSdk.NotFoundError, function(error) {
-              console.log('Issuer Account not active', error);
-              // throw new Error('Invalid Account');
-              return Promise.reject("Issuer Account not active")
-            })
-            .then((issuer) =>{
-              // issuerAcct = issuer;
-              console.log(distAcct, this.server, issuer);
-              // Load dist. account on stellar
-              return this.server.loadAccount(distAcct.publicKey());
-            })
-            .catch(StellarSdk.NotFoundError, (error) => {
-              console.log('Distributing Account not active', error);
-              // throw new Error('Invalid Account');
-              return Promise.reject("Distributing Account not active")
-            })
-            .then((base)=>{
-              console.log(base);
-              var transaction = new StellarSdk.TransactionBuilder(base);
-              var operationObj = {} as any;
-              var setFlags;
+        if (tokenData.revokeAuth) {
+          setFlags += StellarSdk.AuthRevocableFlag;
+        }
+        // set flag options
+        if (setFlags > 0) {
+          operationObj.setFlags = setFlags;
+          operationObj.source = issuerAcct.publicKey();
+          transaction.addOperation(StellarSdk.Operation.setOptions(operationObj));
+        }
 
-              if (tokenData.requireAuth) {
-                setFlags += StellarSdk.AuthRequiredFlag;
-              }
+        // change trust
+        operationObj = {};
+        operationObj.asset = asset;
+        operationObj.source = distAcct.publicKey();
+        transaction.addOperation(StellarSdk.Operation.changeTrust(operationObj));
 
-              if (tokenData.revokeAuth) {
-                setFlags += StellarSdk.AuthRevocableFlag;
-              }
-              // set flag options
-              if (setFlags > 0) {
-                operationObj.setFlags = setFlags;
-                operationObj.source = issuerAcct.publicKey();
-                transaction.addOperation(StellarSdk.Operation.setOptions(operationObj));
-              }
+        // allow trust
+        if (tokenData.requireAuth) {
+          operationObj = {};
+          operationObj.trustor = distAcct.publicKey();
+          operationObj.assetCode = tokenData.assetCode;
+          operationObj.authorize = true;
+          operationObj.source = issuerAcct.publicKey();
+          transaction.addOperation(StellarSdk.Operation.allowTrust(operationObj));
+        }
 
-              // change trust
-              operationObj = {};
-              operationObj.asset = asset;
-              operationObj.source = distAcct.publicKey();
-              transaction.addOperation(StellarSdk.Operation.changeTrust(operationObj));
+        // send asset to dist
+        operationObj = {};
+        operationObj.destination = distAcct.publicKey();
+        operationObj.asset = asset;
+        operationObj.amount = tokenData.amount.toString();
+        operationObj.source = issuerAcct.publicKey();
+        transaction.addOperation(StellarSdk.Operation.payment(operationObj));
 
-              // allow trust
-              if (tokenData.requireAuth) {
-                operationObj = {};
-                operationObj.trustor = distAcct.publicKey();
-                operationObj.assetCode = tokenData.assetCode;
-                operationObj.authorize = true;
-                operationObj.source = issuerAcct.publicKey();
-                transaction.addOperation(StellarSdk.Operation.allowTrust(operationObj));
-              }
+        // lockAccount
+        if (tokenData.lockAccount) {
+          operationObj = {};
+          operationObj.masterWeight = 1;
+          operationObj.lowThreshold = 1;
+          operationObj.medThreshold = 2;
+          operationObj.highThreshold = 3;
+          operationObj.source = issuerAcct.publicKey();
+          transaction.addOperation(StellarSdk.Operation.setOptions(operationObj));
+        }
 
-              // send asset to dist
-              operationObj = {};
-              operationObj.destination = distAcct.publicKey();
-              operationObj.asset = asset;
-              operationObj.amount = tokenData.amount.toString();
-              operationObj.source = issuerAcct.publicKey();
-              transaction.addOperation(StellarSdk.Operation.payment(operationObj));
+        // place offer on stellar DEX
+        if (tokenData.distType) {
+          operationObj = {};
+          operationObj.selling = asset;
+          operationObj.buying = StellarSdk.Asset.native();
+          operationObj.amount = tokenData.distAmount.toString();
+          operationObj.price = tokenData.distPrice;
+          operationObj.source = distAcct.publicKey();
+          transaction.addOperation(StellarSdk.Operation.manageOffer(operationObj));
+        }
 
-              // lockAccount
-              if (tokenData.lockAccount) {
-                operationObj = {};
-                operationObj.masterWeight = 1;
-                operationObj.lowThreshold = 1;
-                operationObj.medThreshold = 2;
-                operationObj.highThreshold = 3;
-                operationObj.source = issuerAcct.publicKey();
-                transaction.addOperation(StellarSdk.Operation.setOptions(operationObj));
-              }
+        // build and sign transaction
+        var builtTx = transaction.build();
+        builtTx.sign(StellarSdk.Keypair.fromSecret(issuerAcct.secret()));
+        builtTx.sign(StellarSdk.Keypair.fromSecret(distAcct.secret()));
 
-              // place offer on stellar DEX
-              if (tokenData.distType) {
-                operationObj = {};
-                operationObj.selling = asset;
-                operationObj.buying = StellarSdk.Asset.native();
-                operationObj.amount = tokenData.distAmount.toString();
-                operationObj.price = tokenData.distPrice;
-                operationObj.source = distAcct.publicKey();
-                transaction.addOperation(StellarSdk.Operation.manageOffer(operationObj));
-              }
-
-              // build and sign transaction
-              var builtTx = transaction.build();
-              builtTx.sign(StellarSdk.Keypair.fromSecret(issuerAcct.secret()));
-              builtTx.sign(StellarSdk.Keypair.fromSecret(distAcct.secret()));
-
-              //send build tx to server
-              return this.server.submitTransaction(builtTx);
-            })
-            .then(function(result) {
-							var res = {
-                Results: result,
-                Asset: tokenData.assetCode,
-                Issuer: issuerAcct.publicKey(),
-                Distributor: distAcct.publicKey(),
-                Message:'Asset created successfully'
-              }
-							return Promise.resolve(res)
-						})
-						.catch(function(error) {
-              console.log(error);
-              return Promise.reject(error)
-							// throw new Error(error);
-						})
-						.catch(function(error) {
-							console.error(error);
-							return Promise.reject(error);
-						});
-
+        //send build tx to server
+        return this.server.submitTransaction(builtTx);
+      })
+      .then((result)=> {
+        var res = {
+          Results: result,
+          Asset: tokenData.assetCode,
+          Issuer: issuerAcct.publicKey(),
+          Distributor: distAcct.publicKey(),
+          Message:'Asset created successfully'
+        }
+        return Promise.resolve(res)
+      })
+      .catch((error)=> {
+        console.log(error);
+        return Promise.reject(error)
+        // throw new Error(error);
+      })
+      .catch((error)=>{
+        console.error(error);
+        return Promise.reject(error);
+      });
   }
 
   validateSeed(seed){

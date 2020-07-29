@@ -11,7 +11,9 @@ export class HeaderComponent implements OnInit {
 
   ngOnInit(): void {
   }
+
   showmenu(val){
     console.log(val)
   }
+  
 }
