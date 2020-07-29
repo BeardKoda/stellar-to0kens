@@ -23,7 +23,7 @@ export class TokenService {
   //   console.log(data, StellarSdk);
   // }
 
-  createAsset(tokenData){
+  async createAsset(tokenData){
     console.log(tokenData);
     var issuerAcct:any = this.validateSeed(tokenData.issuerSecret);
     var distAcct:any = this.validateSeed(tokenData.distSecret);
@@ -31,7 +31,7 @@ export class TokenService {
       console.log("Invalid Issuer Secret Key");
       return Promise.reject("Invalid Issuer Secret Key");
     }else{
-      var asset = this.generateAsset(tokenData.assetType, tokenData.assetCode, issuerAcct.publicKey());
+      var asset = await this.generateAsset(tokenData.assetType, tokenData.assetCode, issuerAcct.publicKey());
     }
     if (!tokenData.amount || tokenData.amount <= 0 || Number.isNaN(tokenData.amount)) {
       console.log("Invalid Amount");
@@ -69,24 +69,27 @@ export class TokenService {
 
 
           // load issuer account
-          return this.server.loadAccount(issuerAcct.publicKey())
+          return await this.server.loadAccount(issuerAcct.publicKey())
             .catch(StellarSdk.NotFoundError, function(error) {
-              console.log('Issuer Account not active');
-              throw new Error('InvalidAccount');
+              console.log('Issuer Account not active', error);
+              // throw new Error('Invalid Account');
+              return Promise.reject("Issuer Account not active")
             })
-            .then(function(issuer) {
+            .then((issuer) =>{
               // issuerAcct = issuer;
+              console.log(distAcct, this.server, issuer);
               // Load dist. account on stellar
               return this.server.loadAccount(distAcct.publicKey());
             })
-            .catch(StellarSdk.NotFoundError, function(error) {
-              console.log('Distributing Account not active');
-              throw new Error('InvalidAccount');
+            .catch(StellarSdk.NotFoundError, (error) => {
+              console.log('Distributing Account not active', error);
+              // throw new Error('Invalid Account');
+              return Promise.reject("Distributing Account not active")
             })
-            .then(function(base) {
-
+            .then((base)=>{
+              console.log(base);
               var transaction = new StellarSdk.TransactionBuilder(base);
-              var operationObj = {}as any;
+              var operationObj = {} as any;
               var setFlags;
 
               if (tokenData.requireAuth) {
@@ -156,7 +159,6 @@ export class TokenService {
 
               //send build tx to server
               return this.server.submitTransaction(builtTx);
-
             })
             .then(function(result) {
 							var res = {
@@ -170,7 +172,7 @@ export class TokenService {
 						})
 						.catch(function(error) {
               console.log(error);
-              Promise.reject(error)
+              return Promise.reject(error)
 							// throw new Error(error);
 						})
 						.catch(function(error) {

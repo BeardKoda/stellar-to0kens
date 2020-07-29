@@ -61,14 +61,19 @@ export class CreateComponent implements OnInit {
       lockAccount:this.f.lockAccount.value,
       distType: this.f.distType.value,
       distAmount:this.f.distAmount.value,
-      distPrice:this.f.distPrice.value
+      distPrice:this.f.distPrice.value,
+      assetType: 1
     }
+
     this.TokenS.createAsset(moba).then((resp)=>{
       console.log(resp);
-      this.SnackS.success(resp, 'Okay');
+      this.SnackS.success(resp.message, 'Okay');
+      this.loading=false;
+      this.submitted=false;
+      this.form.reset();
     }).catch((err)=>{
       console.log(err);
-      this.SnackS.error(err, 'Try again');
+      this.SnackS.error(err, 'Try again!!');
       this.loading=false;
       this.submitted=false;
       // this.form.reset();
@@ -76,7 +81,7 @@ export class CreateComponent implements OnInit {
   }
 
   isDEX = function(type) {
-    // console.log(type)
+    // console.log(type) 
     if (type) {
       return true;
     } else{
