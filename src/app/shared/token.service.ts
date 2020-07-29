@@ -164,7 +164,7 @@ export class TokenService {
           Asset: tokenData.assetCode,
           Issuer: issuerAcct.publicKey(),
           Distributor: distAcct.publicKey(),
-          Message:'Asset created successfully'
+          message:'Asset created successfully'
         }
         return Promise.resolve(res)
       })

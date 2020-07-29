@@ -66,7 +66,7 @@ export class CreateComponent implements OnInit {
     }
 
     this.TokenS.createAsset(moba).then((resp)=>{
-      console.log(resp);
+      // console.log(resp);
       this.SnackS.success(resp.message, 'Okay');
       this.loading=false;
       this.submitted=false;
